@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/masrati-store/static/css/main.e6c13ad2.css",
+    "main.js": "/masrati-store/static/js/main.24d5ea06.js",
+    "static/js/453.cba1d6fc.chunk.js": "/masrati-store/static/js/453.cba1d6fc.chunk.js",
+    "index.html": "/masrati-store/index.html",
+    "main.e6c13ad2.css.map": "/masrati-store/static/css/main.e6c13ad2.css.map",
+    "main.24d5ea06.js.map": "/masrati-store/static/js/main.24d5ea06.js.map",
+    "453.cba1d6fc.chunk.js.map": "/masrati-store/static/js/453.cba1d6fc.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e6c13ad2.css",
+    "static/js/main.24d5ea06.js"
+  ]
+}
