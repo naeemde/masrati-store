@@ -84,12 +84,14 @@ export default function MasratiStore() {
 
   // ✅ تحميل المنتجات من Firebase بشكل فوري
   useEffect(() => {
+    const initialized = localStorage.getItem("masrati_initialized");
     const unsub = onSnapshot(collection(db, "products"), async (snapshot) => {
-      if (snapshot.empty) {
-        // أول مرة — أضف المنتجات الافتراضية
+      if (snapshot.empty && !initialized) {
+        // أول مرة فقط — أضف المنتجات الافتراضية
         for (const p of defaultProducts) {
           await addDoc(collection(db, "products"), p);
         }
+        localStorage.setItem("masrati_initialized", "true");
       } else {
         const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         setProducts(data);
