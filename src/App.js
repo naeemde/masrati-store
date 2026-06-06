@@ -1,13 +1,28 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } from "firebase/firestore";
+
+// ✅ Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyAGE4HYkV7FYPVeqMRr0v8xcA7WKvMakSA",
+  authDomain: "masrati-store-5d794.firebaseapp.com",
+  projectId: "masrati-store-5d794",
+  storageBucket: "masrati-store-5d794.firebasestorage.app",
+  messagingSenderId: "935344749483",
+  appId: "1:935344749483:web:70dda404ef247fd79630ee"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 const WHATSAPP_NUMBER = "9647815633866";
 const ADMIN_PASSWORD = "masrati2025";
 
-const initialProducts = [
-  { id: 1, name: "عطر لوكشري الفاخر", price: 299, category: "عطور", image: null, colors: ["#f5c6d0", "#c9a96e", "#2c2c2c"], sizes: ["30ml", "50ml", "100ml"], description: "عطر فاخر بمسك وورد الطائف" },
-  { id: 2, name: "حقيبة يد كلاسيكية", price: 450, category: "حقائب", image: null, colors: ["#f2c4b0", "#c9a96e", "#1a1a1a"], sizes: ["S", "M", "L"], description: "حقيبة جلدية فاخرة بتصميم أنيق" },
-  { id: 3, name: "طقم مجوهرات ذهبي", price: 850, category: "اكسسوارات", image: null, colors: ["#c9a96e", "#e8e8e8", "#f5c6d0"], sizes: ["XS", "S", "M", "L"], description: "طقم ذهبي فاخر للمناسبات الخاصة" },
-  { id: 4, name: "ساعة فضية راقية", price: 650, category: "اكسسوارات", image: null, colors: ["#e8e8e8", "#c9a96e", "#1a1a1a"], sizes: ["قياس واحد"], description: "ساعة أنيقة بحزام جلدي فاخر" },
+const defaultProducts = [
+  { name: "عطر لوكشري الفاخر", price: 299, category: "عطور", image: null, colors: ["#f5c6d0", "#c9a96e", "#2c2c2c"], sizes: ["30ml", "50ml", "100ml"], description: "عطر فاخر بمسك وورد الطائف" },
+  { name: "حقيبة يد كلاسيكية", price: 450, category: "حقائب", image: null, colors: ["#f2c4b0", "#c9a96e", "#1a1a1a"], sizes: ["S", "M", "L"], description: "حقيبة جلدية فاخرة بتصميم أنيق" },
+  { name: "طقم مجوهرات ذهبي", price: 850, category: "اكسسوارات", image: null, colors: ["#c9a96e", "#e8e8e8", "#f5c6d0"], sizes: ["XS", "S", "M", "L"], description: "طقم ذهبي فاخر للمناسبات الخاصة" },
+  { name: "ساعة فضية راقية", price: 650, category: "اكسسوارات", image: null, colors: ["#e8e8e8", "#c9a96e", "#1a1a1a"], sizes: ["قياس واحد"], description: "ساعة أنيقة بحزام جلدي فاخر" },
 ];
 
 const categories = ["الكل", "عطور", "حقائب", "اكسسوارات"];
@@ -50,7 +65,8 @@ function AdminLoginModal({ onSuccess, onClose }) {
 }
 
 export default function MasratiStore() {
-  const [products, setProducts] = useState(initialProducts);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState("الكل");
@@ -65,6 +81,23 @@ export default function MasratiStore() {
   const [notification, setNotification] = useState(null);
   const fileRef = useRef();
   const editFileRef = useRef();
+
+  // ✅ تحميل المنتجات من Firebase بشكل فوري
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "products"), async (snapshot) => {
+      if (snapshot.empty) {
+        // أول مرة — أضف المنتجات الافتراضية
+        for (const p of defaultProducts) {
+          await addDoc(collection(db, "products"), p);
+        }
+      } else {
+        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        setProducts(data);
+        setLoading(false);
+      }
+    });
+    return () => unsub();
+  }, []);
 
   const showNotif = (msg, type = "success") => { setNotification({ msg, type }); setTimeout(() => setNotification(null), 2800); };
 
@@ -90,10 +123,30 @@ export default function MasratiStore() {
   };
 
   const removeFromCart = key => setCart(prev => prev.filter(i => i.key !== key));
-  const deleteProduct = id => { setProducts(prev => prev.filter(p => p.id !== id)); showNotif("🗑 تم حذف المنتج", "info"); };
-  const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
-  const filtered = activeCategory === "الكل" ? products : products.filter(p => p.category === activeCategory);
+
+  // ✅ حذف من Firebase
+  const deleteProduct = async (id) => {
+    try {
+      await deleteDoc(doc(db, "products", id));
+      showNotif("🗑 تم حذف المنتج", "info");
+    } catch { showNotif("❌ خطأ في الحذف", "info"); }
+  };
+
+  // ✅ إضافة لـ Firebase
+  const handleAddProduct = async () => {
+    if (!newProduct.name || !newProduct.price) return;
+    try {
+      await addDoc(collection(db, "products"), {
+        ...newProduct,
+        price: parseFloat(newProduct.price),
+        colors: newProduct.colors.length ? newProduct.colors : ["#c9a96e"],
+        sizes: newProduct.sizes.length ? newProduct.sizes : ["M"],
+      });
+      setNewProduct({ name: "", price: "", category: "عطور", colors: [], sizes: [], description: "", image: null });
+      setAddProductOpen(false);
+      showNotif("✓ تم إضافة المنتج بنجاح");
+    } catch { showNotif("❌ خطأ في الإضافة", "info"); }
+  };
 
   const handleImageUpload = (e, productId) => {
     const file = e.target.files[0]; if (!file) return;
@@ -105,13 +158,9 @@ export default function MasratiStore() {
     reader.readAsDataURL(file);
   };
 
-  const handleAddProduct = () => {
-    if (!newProduct.name || !newProduct.price) return;
-    setProducts(prev => [...prev, { ...newProduct, id: Date.now(), price: parseFloat(newProduct.price), colors: newProduct.colors.length ? newProduct.colors : ["#c9a96e"], sizes: newProduct.sizes.length ? newProduct.sizes : ["M"] }]);
-    setNewProduct({ name: "", price: "", category: "عطور", colors: [], sizes: [], description: "", image: null });
-    setAddProductOpen(false); showNotif("✓ تم إضافة المنتج بنجاح");
-  };
-
+  const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+  const filtered = activeCategory === "الكل" ? products : products.filter(p => p.category === activeCategory);
   const catEmoji = cat => cat === "عطور" ? "🧴" : cat === "حقائب" ? "👜" : "💍";
 
   return (
@@ -123,7 +172,6 @@ export default function MasratiStore() {
         html{scroll-behavior:smooth}
         body{background:var(--bg);-webkit-tap-highlight-color:transparent}
 
-        /* HERO */
         .hero{background:linear-gradient(160deg,#0a1a0e 0%,#0d2217 40%,#1a3a22 100%);padding:44px 20px 32px;text-align:center;position:relative;overflow:hidden;border-bottom:2px solid var(--green)}
         .hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,128,60,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(0,128,60,0.06) 1px,transparent 1px);background-size:32px 32px}
         .hero-glow{position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:300px;height:200px;background:radial-gradient(circle,rgba(0,128,60,0.2),transparent 70%);pointer-events:none}
@@ -133,16 +181,15 @@ export default function MasratiStore() {
         .hero-logo{width:64px;height:64px;border-radius:14px;background:linear-gradient(135deg,var(--green),var(--green-dark));display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:26px;font-weight:900;color:#fff;position:relative;z-index:1;box-shadow:0 0 30px rgba(0,128,60,0.5)}
         .hero-title{font-size:clamp(26px,8vw,48px);font-weight:900;color:#fff;position:relative;z-index:1;line-height:1.1}
         .hero-title span{color:var(--gold)}
-        .hero-sub{font-size:13px;color:#aaa;position:relative;z-index:1;margin-top:6px}
         .hero-divider{display:flex;align-items:center;gap:10px;justify-content:center;margin:12px 0;position:relative;z-index:1}
-        .hero-divider::before,.hero-divider::after{content:'';flex:1;max-width:60px;height:1px;background:linear-gradient(to right,transparent,var(--gold))}
+        .hero-divider::before{background:linear-gradient(to right,transparent,var(--gold))}
         .hero-divider::after{background:linear-gradient(to left,transparent,var(--gold))}
+        .hero-divider::before,.hero-divider::after{content:'';flex:1;max-width:60px;height:1px}
         .hero-divider span{color:var(--gold);font-size:14px}
         .hero-slogan{font-size:14px;color:var(--gold);letter-spacing:1px;position:relative;z-index:1}
         .hero-tags{display:flex;justify-content:center;gap:8px;margin-top:16px;flex-wrap:wrap;position:relative;z-index:1}
         .hero-tag{background:rgba(255,255,255,0.05);border:1px solid rgba(201,169,110,0.25);color:var(--gold);font-size:11px;padding:5px 14px;border-radius:20px}
 
-        /* NAV */
         nav{background:#0d0d0d;border-bottom:2px solid var(--green);position:sticky;top:0;z-index:100;box-shadow:0 2px 20px rgba(0,128,60,0.15)}
         .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:56px;gap:8px}
         .nav-brand{font-size:16px;font-weight:900;color:#fff;white-space:nowrap;flex-shrink:0}
@@ -156,23 +203,25 @@ export default function MasratiStore() {
         .btn-outline{background:rgba(255,255,255,0.05);color:#aaa;border:1px solid #333;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit;font-weight:600}
         .cart-badge{background:var(--green);color:#fff;border-radius:50%;width:19px;height:19px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
 
-        /* CATS */
         .cats-wrap{background:#111;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch}
         .cats{max-width:1100px;margin:0 auto;display:flex;gap:6px;padding:10px 16px;white-space:nowrap}
         .cat-btn{border:1px solid var(--border);background:var(--bg4);color:var(--text2);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit;font-weight:600;transition:all 0.2s;min-height:36px;white-space:nowrap}
         .cat-btn.active{background:var(--green);color:#fff;border-color:var(--green)}
 
-        /* MAIN */
         .main{max-width:1100px;margin:0 auto;padding:20px 14px 48px}
         .section-title{color:#fff;font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
         .section-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,var(--border),transparent)}
 
-        /* GRID */
+        /* Loading */
+        .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:16px}
+        .loading-spinner{width:48px;height:48px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.8s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .loading-text{color:var(--text3);font-size:14px}
+
         .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
         @media(min-width:500px){.grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}}
         @media(min-width:800px){.grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px}}
 
-        /* CARD */
         .card{background:var(--bg3);border-radius:14px;overflow:hidden;border:1px solid var(--border);transition:transform 0.25s,border-color 0.25s,box-shadow 0.25s;position:relative}
         @media(hover:hover){.card:hover{transform:translateY(-5px);border-color:var(--green);box-shadow:0 8px 30px rgba(0,128,60,0.2)}}
         .card-badge{position:absolute;top:8px;right:8px;background:var(--green);color:#fff;font-size:9px;font-weight:700;padding:3px 8px;border-radius:6px;z-index:5}
@@ -201,7 +250,6 @@ export default function MasratiStore() {
         .add-btn{background:var(--green);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit;font-weight:700;transition:all 0.2s;white-space:nowrap;min-height:36px}
         .add-btn:active{transform:scale(0.95)}
 
-        /* OVERLAY */
         .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
         .panel{background:#1a1a1a;border-radius:24px 24px 0 0;border-top:2px solid var(--green);padding:24px 18px 32px;width:100%;max-width:500px;max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
         .login-panel{background:#1a1a1a;border:1px solid var(--green);border-radius:20px;padding:32px 24px;width:90%;max-width:360px;margin:auto}
@@ -209,7 +257,6 @@ export default function MasratiStore() {
         .panel-title{font-size:20px;font-weight:900;color:#fff;display:flex;align-items:center;gap:8px}
         .close-btn{background:var(--bg4);border:1px solid var(--border);color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 
-        /* CART */
         .cart-item{display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);align-items:center}
         .cart-thumb{width:52px;height:52px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex-shrink:0}
         .cart-thumb img{width:100%;height:100%;object-fit:cover}
@@ -224,7 +271,6 @@ export default function MasratiStore() {
         .wa-btn:active{opacity:0.9;transform:scale(0.98)}
         .wa-icon-circle{width:26px;height:26px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px}
 
-        /* FORM */
         .form-group{margin-bottom:14px}
         .form-label{display:block;font-size:13px;font-weight:700;color:#ccc;margin-bottom:5px}
         .form-input{width:100%;border:2px solid var(--border);border-radius:10px;padding:10px 13px;font-size:14px;font-family:inherit;outline:none;transition:border-color 0.2s;background:var(--bg3);color:#fff}
@@ -242,7 +288,6 @@ export default function MasratiStore() {
         .submit-btn{width:100%;background:linear-gradient(135deg,var(--green),var(--green-dark));color:#fff;border:none;padding:15px;border-radius:12px;font-size:15px;font-family:inherit;font-weight:700;cursor:pointer;margin-top:8px;box-shadow:0 4px 16px rgba(0,128,60,0.3)}
         .submit-btn:disabled{opacity:0.4}
 
-        /* NOTIF */
         .notif{position:fixed;top:66px;left:50%;transform:translateX(-50%);color:#fff;padding:11px 22px;border-radius:30px;font-size:13px;font-weight:700;z-index:999;box-shadow:0 4px 18px rgba(0,0,0,0.4);animation:slideDown 0.3s ease;white-space:nowrap}
         .notif.success{background:var(--green)}
         .notif.info{background:#333}
@@ -251,15 +296,11 @@ export default function MasratiStore() {
         .shake{animation:shake 0.4s ease}
         @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
 
-        /* EMPTY */
         .empty-cart{text-align:center;padding:48px 0;color:var(--text3)}
         .empty-cart .icon{font-size:48px;margin-bottom:12px}
-
-        /* WA FLOAT */
         .wa-float{position:fixed;bottom:20px;left:20px;background:#25D366;color:#fff;width:52px;height:52px;border-radius:50%;font-size:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(37,211,102,0.5);cursor:pointer;z-index:90;text-decoration:none;border:2px solid rgba(255,255,255,0.2)}
 
-        /* FOOTER */
-        footer{background:#0a0a0a;border-top:1px solid var(--border);text-align:center;padding:28px 20px;margin-top:0}
+        footer{background:#0a0a0a;border-top:1px solid var(--border);text-align:center;padding:28px 20px}
         .footer-brand{font-size:20px;font-weight:900;color:var(--gold);margin-bottom:8px}
         .footer-brand span{color:var(--green-light)}
         .footer-line{width:60px;height:2px;background:linear-gradient(to right,transparent,var(--green),transparent);margin:10px auto}
@@ -268,6 +309,9 @@ export default function MasratiStore() {
         .flag-r{flex:1;background:#000}
         .flag-w{flex:1;background:#fff}
         .flag-g{flex:1;background:var(--green)}
+
+        /* Firebase badge */
+        .firebase-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,160,0,0.1);border:1px solid rgba(255,160,0,0.3);color:#ffa000;font-size:11px;padding:4px 12px;border-radius:20px;margin-top:8px}
       `}</style>
 
       {notification && <div className={`notif ${notification.type}`}>{notification.msg}</div>}
@@ -317,54 +361,61 @@ export default function MasratiStore() {
       {/* MAIN */}
       <div className="main">
         <div className="section-title">🛍 المنتجات المتاحة</div>
-        <div className="grid">
-          {filtered.map((product, idx) => (
-            <div key={product.id} className="card">
-              {idx < 2 && <div className="card-badge">{idx === 0 ? "🔥 الأكثر مبيعاً" : "⭐ مميز"}</div>}
-              {isAdmin && <button className="card-del-btn" onClick={() => deleteProduct(product.id)}>🗑</button>}
-              <div className="card-img">
-                {product.image ? <img src={product.image} alt={product.name} /> : <span>{catEmoji(product.category)}</span>}
-                {isAdmin && (
-                  <>
-                    <div className="upload-overlay">
-                      <button className="upload-btn-sm" onClick={() => { editFileRef.current.dataset.pid = product.id; editFileRef.current.click(); }}>📷 تغيير الصورة</button>
-                    </div>
-                    <button className="upload-icon-btn" onClick={() => { editFileRef.current.dataset.pid = product.id; editFileRef.current.click(); }}>📷</button>
-                  </>
-                )}
+
+        {loading ? (
+          <div className="loading">
+            <div className="loading-spinner" />
+            <div className="loading-text">جاري تحميل المنتجات...</div>
+          </div>
+        ) : (
+          <div className="grid">
+            {filtered.map((product, idx) => (
+              <div key={product.id} className="card">
+                {idx < 2 && <div className="card-badge">{idx === 0 ? "🔥 الأكثر مبيعاً" : "⭐ مميز"}</div>}
+                {isAdmin && <button className="card-del-btn" onClick={() => deleteProduct(product.id)}>🗑</button>}
+                <div className="card-img">
+                  {product.image ? <img src={product.image} alt={product.name} /> : <span>{catEmoji(product.category)}</span>}
+                  {isAdmin && (
+                    <>
+                      <div className="upload-overlay">
+                        <button className="upload-btn-sm" onClick={() => { editFileRef.current.dataset.pid = product.id; editFileRef.current.click(); }}>📷 تغيير</button>
+                      </div>
+                      <button className="upload-icon-btn" onClick={() => { editFileRef.current.dataset.pid = product.id; editFileRef.current.click(); }}>📷</button>
+                    </>
+                  )}
+                </div>
+                <div className="card-body">
+                  <div className="card-cat">{product.category}</div>
+                  <div className="card-name">{product.name}</div>
+                  <div className="card-desc">{product.description}</div>
+                  <div className="card-colors">
+                    {(product.colors || []).map(c => (
+                      <div key={c} className={`color-dot ${(selectedColor[product.id] || (product.colors || [])[0]) === c ? "active" : ""}`}
+                        style={{ background: c }} onClick={() => setSelectedColor(prev => ({ ...prev, [product.id]: c }))} />
+                    ))}
+                  </div>
+                  <div className="card-sizes">
+                    {(product.sizes || []).map(s => (
+                      <button key={s} className={`size-btn ${(selectedSize[product.id] || (product.sizes || [])[0]) === s ? "active" : ""}`}
+                        onClick={() => setSelectedSize(prev => ({ ...prev, [product.id]: s }))}>{s}</button>
+                    ))}
+                  </div>
+                  <div className="card-footer">
+                    <div className="price">{(product.price || 0).toLocaleString()} <span>د.ع</span></div>
+                    <button className="add-btn" onClick={() => addToCart(product)}>🛒 أضف</button>
+                  </div>
+                </div>
               </div>
-              <div className="card-body">
-                <div className="card-cat">{product.category}</div>
-                <div className="card-name">{product.name}</div>
-                <div className="card-desc">{product.description}</div>
-                <div className="card-colors">
-                  {product.colors.map(c => (
-                    <div key={c} className={`color-dot ${(selectedColor[product.id] || product.colors[0]) === c ? "active" : ""}`}
-                      style={{ background: c }} onClick={() => setSelectedColor(prev => ({ ...prev, [product.id]: c }))} />
-                  ))}
-                </div>
-                <div className="card-sizes">
-                  {product.sizes.map(s => (
-                    <button key={s} className={`size-btn ${(selectedSize[product.id] || product.sizes[0]) === s ? "active" : ""}`}
-                      onClick={() => setSelectedSize(prev => ({ ...prev, [product.id]: s }))}>{s}</button>
-                  ))}
-                </div>
-                <div className="card-footer">
-                  <div className="price">{product.price.toLocaleString()} <span>د.ع</span></div>
-                  <button className="add-btn" onClick={() => addToCart(product)}>🛒 أضف</button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <input type="file" ref={editFileRef} style={{ display: "none" }} accept="image/*"
-        onChange={e => { handleImageUpload(e, parseInt(editFileRef.current.dataset.pid)); e.target.value = ""; }} />
+        onChange={e => { handleImageUpload(e, editFileRef.current.dataset.pid); e.target.value = ""; }} />
 
       <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noreferrer" className="wa-float">💬</a>
 
-      {/* LOGIN */}
       {showLogin && <AdminLoginModal onSuccess={handleLoginSuccess} onClose={() => setShowLogin(false)} />}
 
       {/* CART */}
@@ -450,18 +501,18 @@ export default function MasratiStore() {
             <div className="form-group">
               <label className="form-label">الألوان</label>
               <div className="color-row">
-                <input type="color" value={colorInput} onChange={e => setColorInput(e.target.value)} style={{ width: 44, height: 40, border: "none", cursor: "pointer", borderRadius: 8, flexShrink: 0, background: "none" }} />
-                <button className="btn-green" style={{ flex: 1, borderRadius: 8 }} onClick={() => { if (!newProduct.colors.includes(colorInput)) setNewProduct(p => ({ ...p, colors: [...p.colors, colorInput] })); }}>+ إضافة لون</button>
+                <input type="color" value={colorInput} onChange={e => setColorInput(e.target.value)} style={{ width: 44, height: 40, border: "none", cursor: "pointer", borderRadius: 8, flexShrink: 0 }} />
+                <button className="btn-green" style={{ flex: 1, borderRadius: 8 }} onClick={() => { if (!newProduct.colors.includes(colorInput)) setNewProduct(p => ({ ...p, colors: [...p.colors, colorInput] })); }}>+ لون</button>
               </div>
               <div className="colors-preview">{newProduct.colors.map(c => <div key={c} className="color-tag" style={{ background: c }} onClick={() => setNewProduct(p => ({ ...p, colors: p.colors.filter(x => x !== c) }))} />)}</div>
             </div>
             <div className="form-group">
               <label className="form-label">المقاسات</label>
               <div className="color-row">
-                <input className="form-input" placeholder="S أو M أو 50ml" value={sizeInput} onChange={e => setSizeInput(e.target.value)}
+                <input className="form-input" placeholder="S أو 50ml" value={sizeInput} onChange={e => setSizeInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && sizeInput.trim()) { setNewProduct(p => ({ ...p, sizes: [...p.sizes, sizeInput.trim()] })); setSizeInput(""); } }}
                   style={{ flex: 1 }} />
-                <button className="btn-green" style={{ borderRadius: 8 }} onClick={() => { if (sizeInput.trim()) { setNewProduct(p => ({ ...p, sizes: [...p.sizes, sizeInput.trim()] })); setSizeInput(""); } }}>+ إضافة</button>
+                <button className="btn-green" style={{ borderRadius: 8 }} onClick={() => { if (sizeInput.trim()) { setNewProduct(p => ({ ...p, sizes: [...p.sizes, sizeInput.trim()] })); setSizeInput(""); } }}>+ مقاس</button>
               </div>
               <div className="sizes-preview">{newProduct.sizes.map(s => <div key={s} className="size-tag" onClick={() => setNewProduct(p => ({ ...p, sizes: p.sizes.filter(x => x !== s) }))}>{s} ✕</div>)}</div>
             </div>
@@ -476,7 +527,8 @@ export default function MasratiStore() {
         <div className="footer-line" />
         <p>للإكسسوارات والعطور الفاخرة — العراق</p>
         <p>♥ لمسة من الأناقة... لكل لحظة ♥</p>
-        <p style={{ marginTop: 12, fontSize: 11 }}>واتساب: +964 781 563 3866</p>
+        <div style={{ marginTop: 10 }}><span className="firebase-badge">🔥 مدعوم بـ Firebase</span></div>
+        <p style={{ marginTop: 8, fontSize: 11 }}>واتساب: +964 781 563 3866</p>
       </footer>
     </div>
   );
