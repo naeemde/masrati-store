@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } from "firebase/firestore";
+import { getFirestore, collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot } from "firebase/firestore";
 
 // ✅ Firebase Config
 const firebaseConfig = {
@@ -75,6 +75,9 @@ export default function MasratiStore() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
+  const [editProduct, setEditProduct] = useState(null);
+  const [editColorInput, setEditColorInput] = useState("#c9a96e");
+  const [editSizeInput, setEditSizeInput] = useState("");
   const [newProduct, setNewProduct] = useState({ name: "", price: "", category: "عطور", colors: [], sizes: [], description: "", image: null });
   const [colorInput, setColorInput] = useState("#c9a96e");
   const [sizeInput, setSizeInput] = useState("");
@@ -132,6 +135,17 @@ export default function MasratiStore() {
       await deleteDoc(doc(db, "products", id));
       showNotif("🗑 تم حذف المنتج", "info");
     } catch { showNotif("❌ خطأ في الحذف", "info"); }
+  };
+
+  // ✅ تحديث منتج في Firebase
+  const handleUpdateProduct = async () => {
+    if (!editProduct || !editProduct.name || !editProduct.price) return;
+    try {
+      const { id, ...data } = editProduct;
+      await updateDoc(doc(db, "products", id), { ...data, price: parseFloat(data.price) });
+      setEditProduct(null);
+      showNotif("✓ تم تحديث المنتج بنجاح");
+    } catch(e) { showNotif("❌ خطأ في التحديث", "info"); }
   };
 
   // ✅ إضافة لـ Firebase
@@ -300,6 +314,9 @@ export default function MasratiStore() {
 
         .empty-cart{text-align:center;padding:48px 0;color:var(--text3)}
         .empty-cart .icon{font-size:48px;margin-bottom:12px}
+
+        .card-edit-btn{position:absolute;top:8px;left:42px;background:rgba(201,169,110,0.9);color:#1a1a1a;border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;z-index:10}
+        .edit-panel{background:#1a1a1a;border-radius:24px 24px 0 0;border-top:2px solid var(--gold);padding:24px 18px 32px;width:100%;max-width:500px;max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
         .wa-float{position:fixed;bottom:20px;left:20px;background:#25D366;color:#fff;width:52px;height:52px;border-radius:50%;font-size:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(37,211,102,0.5);cursor:pointer;z-index:90;text-decoration:none;border:2px solid rgba(255,255,255,0.2)}
 
         footer{background:#0a0a0a;border-top:1px solid var(--border);text-align:center;padding:28px 20px}
@@ -375,6 +392,7 @@ export default function MasratiStore() {
               <div key={product.id} className="card">
                 {idx < 2 && <div className="card-badge">{idx === 0 ? "🔥 الأكثر مبيعاً" : "⭐ مميز"}</div>}
                 {isAdmin && <button className="card-del-btn" onClick={() => deleteProduct(product.id)}>🗑</button>}
+                {isAdmin && <button className="card-edit-btn" onClick={() => setEditProduct({...product})}>✏️</button>}
                 <div className="card-img">
                   {product.image ? <img src={product.image} alt={product.name} /> : <span>{catEmoji(product.category)}</span>}
                   {isAdmin && (
@@ -522,6 +540,99 @@ export default function MasratiStore() {
           </div>
         </div>
       )}
+
+      {/* EDIT PRODUCT MODAL */}
+      {editProduct && isAdmin && (
+        <div className="overlay" onClick={() => setEditProduct(null)}>
+          <div className="edit-panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-header">
+              <div className="panel-title"><span style={{color:"var(--gold)"}}>✏️</span> تعديل المنتج</div>
+              <button className="close-btn" onClick={() => setEditProduct(null)}>✕</button>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">اسم المنتج</label>
+              <input className="form-input" value={editProduct.name}
+                onChange={e => setEditProduct(p => ({...p, name: e.target.value}))} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">السعر (د.ع)</label>
+              <input className="form-input" type="number" inputMode="numeric" value={editProduct.price}
+                onChange={e => setEditProduct(p => ({...p, price: e.target.value}))} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">الفئة</label>
+              <select className="form-select" value={editProduct.category}
+                onChange={e => setEditProduct(p => ({...p, category: e.target.value}))}>
+                <option>عطور</option><option>حقائب</option><option>اكسسوارات</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">الوصف</label>
+              <input className="form-input" value={editProduct.description || ""}
+                onChange={e => setEditProduct(p => ({...p, description: e.target.value}))} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">الألوان — اضغط على اللون لحذفه</label>
+              <div className="color-row">
+                <input type="color" value={editColorInput} onChange={e => setEditColorInput(e.target.value)}
+                  style={{width:44,height:40,border:"none",cursor:"pointer",borderRadius:8,flexShrink:0}} />
+                <button className="btn-green" style={{flex:1,borderRadius:8}} onClick={() => {
+                  if (!editProduct.colors.includes(editColorInput))
+                    setEditProduct(p => ({...p, colors:[...p.colors, editColorInput]}));
+                }}>+ إضافة لون</button>
+              </div>
+              <div className="colors-preview">
+                {(editProduct.colors||[]).map(c => (
+                  <div key={c} className="color-tag" style={{background:c}}
+                    onClick={() => setEditProduct(p => ({...p, colors:p.colors.filter(x=>x!==c)}))} />
+                ))}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">المقاسات — اضغط على المقاس لحذفه</label>
+              <div className="color-row">
+                <input className="form-input" placeholder="S أو 50ml" value={editSizeInput}
+                  onChange={e => setEditSizeInput(e.target.value)}
+                  onKeyDown={e => { if(e.key==="Enter" && editSizeInput.trim()){
+                    setEditProduct(p=>({...p,sizes:[...p.sizes,editSizeInput.trim()]}));
+                    setEditSizeInput("");
+                  }}}
+                  style={{flex:1}} />
+                <button className="btn-green" style={{borderRadius:8}} onClick={() => {
+                  if(editSizeInput.trim()){
+                    setEditProduct(p=>({...p,sizes:[...p.sizes,editSizeInput.trim()]}));
+                    setEditSizeInput("");
+                  }
+                }}>+ إضافة</button>
+              </div>
+              <div className="sizes-preview">
+                {(editProduct.sizes||[]).map(s => (
+                  <div key={s} className="size-tag"
+                    onClick={() => setEditProduct(p=>({...p,sizes:p.sizes.filter(x=>x!==s)}))}>{s} ✕</div>
+                ))}
+              </div>
+            </div>
+
+            <button className="submit-btn" onClick={handleUpdateProduct}
+              disabled={!editProduct.name || !editProduct.price}>
+              💾 حفظ التعديلات
+            </button>
+
+            <button onClick={() => setEditProduct(null)}
+              style={{width:"100%",background:"none",border:"1px solid #333",color:"#666",
+                padding:12,borderRadius:12,fontSize:14,fontFamily:"inherit",cursor:"pointer",marginTop:8}}>
+              إلغاء
+            </button>
+          </div>
+        </div>
+      )}
+
 
       <footer>
         <div className="footer-flag"><div className="flag-r"/><div className="flag-w"/><div className="flag-g"/></div>
