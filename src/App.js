@@ -133,6 +133,8 @@ export default function MasratiStore() {
   const [cart, setCart]               = useState([]);
   const [cartOpen, setCartOpen]       = useState(false);
   const [activeCategory, setActiveCategory] = useState("الكل");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PRODUCTS_PER_PAGE = 5;
   const [selectedColor, setSelectedColor]   = useState({});
   const [selectedSize, setSelectedSize]     = useState({});
   const [isAdmin, setIsAdmin]         = useState(false);
@@ -251,7 +253,10 @@ export default function MasratiStore() {
   };
 
   const catEmoji = cat => cat==="عطور"?"🧴":cat==="حقائب"?"👜":"💍";
-  const filtered = activeCategory==="الكل" ? products : products.filter(p=>p.category===activeCategory);
+  const allFiltered = activeCategory==="الكل" ? products : products.filter(p=>p.category===activeCategory);
+  const totalPages = Math.ceil(allFiltered.length / PRODUCTS_PER_PAGE);
+  const filtered = allFiltered.slice((currentPage-1)*PRODUCTS_PER_PAGE, currentPage*PRODUCTS_PER_PAGE);
+  const handleCategoryChange = (c) => { setActiveCategory(c); setCurrentPage(1); };
 
   return (
     <div dir="rtl" style={{fontFamily:"'Noto Serif Arabic',Georgia,serif",minHeight:"100vh",background:"#141414"}}>
@@ -388,6 +393,15 @@ export default function MasratiStore() {
         .shake{animation:shake .4s ease}
         @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
 
+
+        /* Pagination */
+        .pagination{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:28px;flex-wrap:wrap}
+        .page-btn{background:var(--bg4);border:1px solid var(--border);color:var(--text2);width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
+        .page-btn:hover{border-color:var(--green);color:var(--green)}
+        .page-btn.active{background:var(--green);color:#fff;border-color:var(--green);box-shadow:0 4px 12px rgba(0,128,60,0.3)}
+        .page-btn.arrow{font-size:18px}
+        .page-btn:disabled{opacity:0.3;cursor:not-allowed}
+        .page-info{color:var(--text3);font-size:12px;text-align:center;margin-top:10px}
         .empty-cart{text-align:center;padding:48px 0;color:var(--text3)}
         .wa-float{position:fixed;bottom:20px;left:20px;background:#25D366;color:#fff;width:52px;height:52px;border-radius:50%;font-size:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(37,211,102,.5);cursor:pointer;z-index:90;text-decoration:none;border:2px solid rgba(255,255,255,.2)}
 
@@ -438,7 +452,7 @@ export default function MasratiStore() {
       <div className="cats-wrap">
         <div className="cats">
           {categories.map(c=>(
-            <button key={c} className={`cat-btn ${activeCategory===c?"active":""}`} onClick={()=>setActiveCategory(c)}>{c}</button>
+            <button key={c} className={`cat-btn ${activeCategory===c?"active":""}`} onClick={()=>handleCategoryChange(c)}>{c}</button>
           ))}
         </div>
       </div>
@@ -496,9 +510,23 @@ export default function MasratiStore() {
             })}
           </div>
         )}
+        {/* PAGINATION */}
+        {totalPages > 1 && (
+          <div>
+            <div className="pagination">
+              <button className="page-btn arrow" disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)}>›</button>
+              {Array.from({length:totalPages},(_,i)=>i+1).map(page=>(
+                <button key={page} className={`page-btn ${currentPage===page?"active":""}`} onClick={()=>setCurrentPage(page)}>{page}</button>
+              ))}
+              <button className="page-btn arrow" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)}>‹</button>
+            </div>
+            <div className="page-info">صفحة {currentPage} من {totalPages} — إجمالي {allFiltered.length} منتج</div>
+          </div>
+        )}
+
       </div>
 
-      {/* Hidden file inputs */}
+      {/* Hidden file inputs */
       <input type="file" ref={multiFileRef} style={{display:"none"}} accept="image/*" multiple
         onChange={e=>{ handleMultiImages(e,"new"); e.target.value=""; }} />
       <input type="file" ref={editMultiFileRef} style={{display:"none"}} accept="image/*" multiple
