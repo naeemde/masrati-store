@@ -160,17 +160,29 @@ export default function MasratiStore() {
 
   // ── Firebase load ──
   useEffect(() => {
+    // Timeout: إذا تأخر التحميل أكثر من 8 ثواني أوقفه
+    const timeout = setTimeout(() => setLoading(false), 8000);
     const initialized = localStorage.getItem("masrati_initialized");
     const unsub = onSnapshot(collection(db, "products"), async snapshot => {
       if (snapshot.empty && !initialized) {
+        // أول مرة — أضف الافتراضية
         for (const p of defaultProducts) await addDoc(collection(db, "products"), p);
         localStorage.setItem("masrati_initialized","true");
+      } else if (snapshot.empty && initialized) {
+        // فارغة عن قصد (بعد الحذف)
+        setProducts([]);
+        setLoading(false);
       } else {
-        setProducts(snapshot.docs.map(d=>({id:d.id,...d.data()})));
+        // عندها منتجات — حمّل فوراً
+        const data = snapshot.docs.map(d=>({id:d.id,...d.data()}));
+        setProducts(data);
         setLoading(false);
       }
+    }, (error) => {
+      console.error("Firebase error:", error);
+      setLoading(false);
     });
-    return () => unsub();
+    return () => { unsub(); clearTimeout(timeout); };
   }, []);
 
   const showNotif = (msg, type="success") => { setNotification({msg,type}); setTimeout(()=>setNotification(null),2800); };
@@ -511,14 +523,14 @@ export default function MasratiStore() {
           </div>
         )}
         {/* PAGINATION */}
-        {totalPages > 1 && (
+        {allFiltered.length > 0 && totalPages >= 1 && (
           <div>
             <div className="pagination">
-              <button className="page-btn arrow" disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)}>›</button>
+              <button className="page-btn arrow" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)} title="الصفحة التالية">‹</button>
               {Array.from({length:totalPages},(_,i)=>i+1).map(page=>(
-                <button key={page} className={`page-btn ${currentPage===page?"active":""}`} onClick={()=>setCurrentPage(page)}>{page}</button>
+                <button key={page} className={`page-btn ${currentPage===page?"active":""}`} onClick={()=>{ setCurrentPage(page); window.scrollTo({top:0,behavior:'smooth'}); }}>{page}</button>
               ))}
-              <button className="page-btn arrow" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)}>‹</button>
+              <button className="page-btn arrow" disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)} title="الصفحة السابقة">›</button>
             </div>
             <div className="page-info">صفحة {currentPage} من {totalPages} — إجمالي {allFiltered.length} منتج</div>
           </div>
