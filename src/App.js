@@ -523,7 +523,7 @@ export default function MasratiStore() {
           </div>
         )}
         {/* PAGINATION */}
-        {allFiltered.length > 0 && totalPages >= 1 && (
+        {totalPages > 1 && (
           <div>
             <div className="pagination">
               <button className="page-btn arrow" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)} title="الصفحة التالية">‹</button>
@@ -538,7 +538,7 @@ export default function MasratiStore() {
 
       </div>
 
-      {/* Hidden file inputs */
+      {/* Hidden file inputs */}
       <input type="file" ref={multiFileRef} style={{display:"none"}} accept="image/*" multiple
         onChange={e=>{ handleMultiImages(e,"new"); e.target.value=""; }} />
       <input type="file" ref={editMultiFileRef} style={{display:"none"}} accept="image/*" multiple
@@ -621,7 +621,8 @@ export default function MasratiStore() {
               <label className="form-label">صور المنتج (يمكن رفع أكثر من صورة)</label>
               <div className="upload-area" onClick={()=>multiFileRef.current.click()}>
                 <div style={{fontSize:28,marginBottom:4}}>📷</div>
-                <p style={{fontSize:12,color:"#555"}}>اضغط لرفع صور (اختر أكثر من واحدة)</p>
+                <p style={{fontSize:12,color:"#aaa",marginBottom:4}}>اضغط لاختيار صور</p>
+                <p style={{fontSize:10,color:"#555"}}>✅ يمكن اختيار أكثر من صورة بنفس الوقت</p>
               </div>
               {np.images.length>0 && (
                 <div className="images-preview">
@@ -694,7 +695,8 @@ export default function MasratiStore() {
               <label className="form-label">صور المنتج</label>
               <div className="upload-area" onClick={()=>editMultiFileRef.current.click()}>
                 <div style={{fontSize:24,marginBottom:4}}>📷</div>
-                <p style={{fontSize:11,color:"#555"}}>اضغط لإضافة صور</p>
+                <p style={{fontSize:11,color:"#aaa",marginBottom:3}}>اضغط لإضافة صور</p>
+                <p style={{fontSize:9,color:"#555"}}>✅ يمكن اختيار أكثر من صورة</p>
               </div>
               {(editProduct.images||[]).length>0 && (
                 <div className="images-preview">
